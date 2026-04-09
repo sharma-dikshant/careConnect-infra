@@ -5,6 +5,30 @@ import * as rds from "aws-cdk-lib/aws-rds";
 // import * as s3 from "aws-cdk-lib/aws-s3";
 // import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as dotenv from "dotenv";
+import * as path from "path";
+
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+
+/**
+ * Filter process.env by prefix, strip the prefix from each key,
+ * then merge CDK-token overrides (e.g. RDS endpoint, instance IPs).
+ * Overrides win over local .env values.
+ */
+function buildEnvLines(
+  prefix: string,
+  overrides: Record<string, string> = {},
+): string {
+  const lines: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith(prefix) && value !== undefined) {
+      lines[key.slice(prefix.length)] = value;
+    }
+  }
+  return Object.entries({ ...lines, ...overrides })
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+}
 
 export class CareConnectInfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -185,6 +209,41 @@ export class CareConnectInfraStack extends cdk.Stack {
       credentials: rds.Credentials.fromGeneratedSecret("postgres"),
       databaseName: "careconnect",
     });
+
+    // ──────────────────────────────────────────────
+    // UserData — inject .env files
+    // ──────────────────────────────────────────────
+    // Variables from local .env are loaded at synth time (dotenv).
+    // CDK-token overrides (RDS endpoint, instance IPs) are resolved by
+    // CloudFormation at deploy time — they embed correctly via Fn::Join.
+    // <<'ENVEOF' prevents shell from expanding variables (we want literals).
+
+    backend.addUserData(
+      `cat > /home/ec2-user/.env <<'ENVEOF'\n` +
+        buildEnvLines("SERVER_", {
+          DB_HOST: db.dbInstanceEndpointAddress,
+          DB_PORT: db.dbInstanceEndpointPort,
+          BOT_SERVER_BASE_URL: `http://${rag.instancePublicIp}:8000`,
+        }) +
+        `\nENVEOF`,
+    );
+
+    frontend.addUserData(
+      `cat > /home/ec2-user/.env <<'ENVEOF'\n` +
+        buildEnvLines("FRONTEND_", {
+          VITE_API_BASE_URL: `http://${backend.instancePublicIp}:3000`,
+        }) +
+        `\nENVEOF`,
+    );
+
+    rag.addUserData(
+      `cat > /home/ec2-user/.env <<'ENVEOF'\n` +
+        buildEnvLines("RAG_", {
+          DATABASE_HOST: db.dbInstanceEndpointAddress,
+        }) +
+        `\nENVEOF`,
+    );
+
     // ──────────────────────────────────────────────
     // S3 Bucket (commented out)
     // ──────────────────────────────────────────────
