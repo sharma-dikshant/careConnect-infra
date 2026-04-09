@@ -219,7 +219,7 @@ export class CareConnectInfraStack extends cdk.Stack {
     // <<'ENVEOF' prevents shell from expanding variables (we want literals).
 
     backend.addUserData(
-      `cat > /home/ec2-user/.env <<'ENVEOF'\n` +
+      `cat > /home/ubuntu/.env <<'ENVEOF'\n` +
         buildEnvLines("SERVER_", {
           DB_HOST: db.dbInstanceEndpointAddress,
           DB_PORT: db.dbInstanceEndpointPort,
@@ -229,7 +229,7 @@ export class CareConnectInfraStack extends cdk.Stack {
     );
 
     frontend.addUserData(
-      `cat > /home/ec2-user/.env <<'ENVEOF'\n` +
+      `cat > /home/ubuntu/.env <<'ENVEOF'\n` +
         buildEnvLines("FRONTEND_", {
           VITE_API_BASE_URL: `http://${backend.instancePublicIp}:3000`,
         }) +
@@ -237,7 +237,7 @@ export class CareConnectInfraStack extends cdk.Stack {
     );
 
     rag.addUserData(
-      `cat > /home/ec2-user/.env <<'ENVEOF'\n` +
+      `cat > /home/ubuntu/.env <<'ENVEOF'\n` +
         buildEnvLines("RAG_", {
           DATABASE_HOST: db.dbInstanceEndpointAddress,
         }) +
