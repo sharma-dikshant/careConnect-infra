@@ -2,8 +2,8 @@ import * as cdk from "aws-cdk-lib/core";
 import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
-import * as s3 from "aws-cdk-lib/aws-s3";
-import * as lambda from "aws-cdk-lib/aws-lambda";
+// import * as s3 from "aws-cdk-lib/aws-s3";
+// import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
 
 export class CareConnectInfraStack extends cdk.Stack {
@@ -28,6 +28,12 @@ export class CareConnectInfraStack extends cdk.Stack {
     });
 
     // ──────────────────────────────────────────────
+    // Key Pair
+    // ──────────────────────────────────────────────
+
+    const keyPair = ec2.KeyPair.fromKeyPairName(this, "keyPair", "careconnect");
+
+    // ──────────────────────────────────────────────
     // EC2 Instances
     // ──────────────────────────────────────────────
     // FREE TIER: 750 hrs/mo of t3.micro shared across ALL instances.
@@ -44,6 +50,7 @@ export class CareConnectInfraStack extends cdk.Stack {
       description: "Allow HTTP and HTTPS traffic to frontend",
       allowAllOutbound: true,
     });
+    frontendSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), "SSH");
     frontendSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), "HTTP");
     frontendSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "HTTPS");
 
@@ -65,6 +72,7 @@ export class CareConnectInfraStack extends cdk.Stack {
       securityGroup: frontendSg,
       role: frontendRole,
       associatePublicIpAddress: true,
+      keyPair,
     });
 
     // ── Backend ──
@@ -75,13 +83,14 @@ export class CareConnectInfraStack extends cdk.Stack {
       description: "Allow traffic to backend API on port 3000",
       allowAllOutbound: true,
     });
+    backendSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), "SSH");
     backendSg.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(3000),
       "Backend API",
     );
 
-    // Backend role gets S3 grants below (after bucket creation)
+    // Backend role (S3 grants commented out with bucket)
     const backendRole = new iam.Role(this, "careconnect-backend-role", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
       managedPolicies: [
@@ -99,6 +108,7 @@ export class CareConnectInfraStack extends cdk.Stack {
       securityGroup: backendSg,
       role: backendRole,
       associatePublicIpAddress: true,
+      keyPair,
     });
 
     // ── RAG Server ──
@@ -109,6 +119,7 @@ export class CareConnectInfraStack extends cdk.Stack {
       description: "Allow traffic to RAG server on port 8000",
       allowAllOutbound: true,
     });
+    ragSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), "SSH");
     ragSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8000), "RAG Server");
 
     const ragRole = new iam.Role(this, "careconnect-rag-role", {
@@ -128,6 +139,7 @@ export class CareConnectInfraStack extends cdk.Stack {
       securityGroup: ragSg,
       role: ragRole,
       associatePublicIpAddress: true,
+      keyPair,
     });
 
     // ──────────────────────────────────────────────
@@ -174,41 +186,35 @@ export class CareConnectInfraStack extends cdk.Stack {
       databaseName: "careconnect",
     });
     // ──────────────────────────────────────────────
-    // S3 Bucket
+    // S3 Bucket (commented out)
     // ──────────────────────────────────────────────
-    // Kept locked down even in dev — no reason to expose file storage publicly.
-    // autoDeleteObjects deploys a CDK-managed Lambda to empty the bucket before deletion.
-    const bucket = new s3.Bucket(this, "careconnect-storage-bucket", {
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    // const bucket = new s3.Bucket(this, "careconnect-storage-bucket", {
+    //   encryption: s3.BucketEncryption.S3_MANAGED,
+    //   versioned: true,
+    //   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
+    //   autoDeleteObjects: true,
+    // });
 
-    // Least-privilege S3 grants — scoped to this bucket only
-    bucket.grantRead(backendRole);
-    bucket.grantPut(backendRole);
+    // bucket.grantRead(backendRole);
+    // bucket.grantPut(backendRole);
 
     // ──────────────────────────────────────────────
-    // Lambda
+    // Lambda (commented out)
     // ──────────────────────────────────────────────
-    // Outside VPC — no cold-start penalty, and it only needs S3 + CloudWatch.
-    // CDK auto-attaches AWSLambdaBasicExecutionRole for CloudWatch Logs.
-    // Inline handler is a placeholder — replace with Code.fromAsset() for real logic.
-    const workerFn = new lambda.Function(this, "careconnect-worker-function", {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: "index.handler",
-      code: lambda.Code.fromInline(
-        'exports.handler = async () => ({ statusCode: 200, body: "ok" });',
-      ),
-      environment: {
-        S3_BUCKET_NAME: bucket.bucketName,
-      },
-    });
+    // const workerFn = new lambda.Function(this, "careconnect-worker-function", {
+    //   runtime: lambda.Runtime.NODEJS_22_X,
+    //   handler: "index.handler",
+    //   code: lambda.Code.fromInline(
+    //     'exports.handler = async () => ({ statusCode: 200, body: "ok" });',
+    //   ),
+    //   environment: {
+    //     S3_BUCKET_NAME: bucket.bucketName,
+    //   },
+    // });
 
-    bucket.grantRead(workerFn);
-    bucket.grantPut(workerFn);
+    // bucket.grantRead(workerFn);
+    // bucket.grantPut(workerFn);
 
     // ──────────────────────────────────────────────
     // Stack Outputs
@@ -250,14 +256,14 @@ export class CareConnectInfraStack extends cdk.Stack {
       description: "RDS PostgreSQL port",
     });
 
-    new cdk.CfnOutput(this, "S3BucketName", {
-      value: bucket.bucketName,
-      description: "S3 storage bucket name",
-    });
+    // new cdk.CfnOutput(this, "S3BucketName", {
+    //   value: bucket.bucketName,
+    //   description: "S3 storage bucket name",
+    // });
 
-    new cdk.CfnOutput(this, "LambdaFunctionName", {
-      value: workerFn.functionName,
-      description: "Worker Lambda function name",
-    });
+    // new cdk.CfnOutput(this, "LambdaFunctionName", {
+    //   value: workerFn.functionName,
+    //   description: "Worker Lambda function name",
+    // });
   }
 }
