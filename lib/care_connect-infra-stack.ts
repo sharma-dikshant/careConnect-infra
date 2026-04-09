@@ -92,7 +92,9 @@ export class CareConnectInfraStack extends cdk.Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType("t3.micro"),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      machineImage: ec2.MachineImage.fromSsmParameter(
+        "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id",
+      ),
       securityGroup: frontendSg,
       role: frontendRole,
       associatePublicIpAddress: true,
@@ -128,7 +130,9 @@ export class CareConnectInfraStack extends cdk.Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType("t3.micro"),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      machineImage: ec2.MachineImage.fromSsmParameter(
+        "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id",
+      ),
       securityGroup: backendSg,
       role: backendRole,
       associatePublicIpAddress: true,
@@ -159,7 +163,9 @@ export class CareConnectInfraStack extends cdk.Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType("t3.micro"),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      machineImage: ec2.MachineImage.fromSsmParameter(
+        "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id",
+      ),
       securityGroup: ragSg,
       role: ragRole,
       associatePublicIpAddress: true,
@@ -242,6 +248,45 @@ export class CareConnectInfraStack extends cdk.Stack {
           DATABASE_HOST: db.dbInstanceEndpointAddress,
         }) +
         `\nENVEOF`,
+    );
+
+    // ──────────────────────────────────────────────
+    // UserData — installing software dependencies
+    // ──────────────────────────────────────────────
+    backend.addUserData(
+      `#!/bin/bash`,
+      `apt update -y`,
+
+      // Install Docker
+      `apt install -y docker.io`,
+      `systemctl start docker`,
+      `systemctl enable docker`,
+      `usermod -aG docker ubuntu`,
+    );
+
+    frontend.addUserData(
+      `#!/bin/bash`,
+      `apt update -y`,
+
+      // Install Nginx
+      `apt install -y nginx`,
+      `systemctl start nginx`,
+      `systemctl enable nginx`,
+    );
+
+    backend.addUserData(
+      `#!/bin/bash`,
+      `apt update -y`,
+
+      // Install Docker
+      `apt install -y docker.io`,
+      `systemctl start docker`,
+      `systemctl enable docker`,
+      `usermod -aG docker ubuntu`,
+
+      // Install Docker Compose
+      `curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose`,
+      `chmod +x /usr/local/bin/docker-compose`,
     );
 
     // ──────────────────────────────────────────────

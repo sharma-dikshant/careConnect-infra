@@ -13,3 +13,6 @@ keys
 
 # env
 *.env
+
+# infra deployment outputs
+INFRA_DETAILS.txt
