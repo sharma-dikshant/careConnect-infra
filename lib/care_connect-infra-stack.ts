@@ -272,6 +272,38 @@ export class CareConnectInfraStack extends cdk.Stack {
       `apt install -y nginx`,
       `systemctl start nginx`,
       `systemctl enable nginx`,
+      // Write Nginx config
+      `cat > /etc/nginx/sites-available/default << 'EOF'
+          server {
+            listen 80;
+            server_name _;
+
+            root /usr/share/nginx/html/dist;
+            index index.html;
+
+            gzip on;
+            gzip_types text/plain text/css application/json application/javascript
+                      text/xml application/xml application/xml+rss text/javascript
+                      image/svg+xml;
+
+            location /assets/ {
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+                try_files $uri =404;
+            }
+
+            location /health {
+                access_log off;
+                return 200 "ok\\n";
+                add_header Content-Type text/plain;
+            }
+
+            location / {
+                try_files $uri $uri/ /index.html;
+                add_header Cache-Control "no-cache, no-store, must-revalidate";
+            }
+          }
+      EOF`,
     );
 
     backend.addUserData(
