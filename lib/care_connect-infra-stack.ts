@@ -307,18 +307,27 @@ export class CareConnectInfraStack extends cdk.Stack {
     );
 
     backend.addUserData(
-      `#!/bin/bash`,
-      `apt update -y`,
+      "#!/bin/bash",
+      "apt update -y",
+      "apt upgrade -y",
 
-      // Install Docker
-      `apt install -y docker.io`,
-      `systemctl start docker`,
-      `systemctl enable docker`,
-      `usermod -aG docker ubuntu`,
+      // Install Node 20
+      "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
+      "apt install -y nodejs git",
 
-      // Install Docker Compose
-      `curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose`,
-      `chmod +x /usr/local/bin/docker-compose`,
+      // Install PM2
+      "npm install -g pm2",
+
+      // App setup
+      "cd /home/ubuntu",
+      "git clone https://github.com/your-repo/backend.git app",
+      "cd app",
+      "npm install",
+
+      // Start app
+      "pm2 start npm --name backend -- start",
+      "pm2 save",
+      "pm2 startup systemd -u ubuntu --hp /home/ubuntu | bash",
     );
 
     // ──────────────────────────────────────────────
